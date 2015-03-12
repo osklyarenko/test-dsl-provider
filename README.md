@@ -20,7 +20,9 @@ Add the following entry for for the Surefire plugin under `plugin/dependencies` 
 ```
 ## Launching JUnit tests
 To launch JUnit tests with filter applied pass the `testFilterDsl` argument to maven. Only full file path is allowed.
-mvn  test -DtestFilterDsl=$PWD/testFilter.groovy
+```
+mvn test -DtestFilterDsl=$PWD/testFilter.groovy
+```
 ## Compatibity
 The code should work with
 * junit 4.11
