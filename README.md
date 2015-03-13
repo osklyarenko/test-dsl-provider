@@ -1,6 +1,7 @@
 # test-dsl-provider
-Custom Surefire Provider powered by an easy to use DSL filter
-
+An extension to the Surefire Maven plugin powered by an easy to use DSL filter
+## Building the project
+Simply run `mvn install`
 ## See Grammar
 See https://github.com/osklyarenko/test-dsl-provider/blob/master/src/test/java/morning/dsl/DslSpec.groovy for details
 ## Configuring maven project
