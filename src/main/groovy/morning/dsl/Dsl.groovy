@@ -184,7 +184,7 @@ public class Dsl {
 
         packagesByName[pkg.name] = pkg
 
-        println "Registered package '$pkg.name'"
+        println "\tRegistered package '$pkg.name'"
     }
 
     def registerModule(Module module) {

@@ -100,7 +100,13 @@ $dslText
 
         def module = currentModule()
         def filter = new MyScannerFilter(scannerFilter, { Class testClass ->
-            testSuite.ownsTest(module, testClass)
+            boolean owns = testSuite.ownsTest(module, testClass)
+
+            if (owns) {
+                consoleLogger.info "[FILTER] Included test ${testClass.name}\n"
+            } else {
+                consoleLogger.info "[FILTER] Skipped test ${testClass.name}\n"
+            }
         })
 
 
