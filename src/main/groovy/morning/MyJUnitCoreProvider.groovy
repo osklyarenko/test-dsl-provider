@@ -107,8 +107,9 @@ $dslText
             } else {
                 consoleLogger.info "[FILTER] Skipped test ${testClass.name}\n"
             }
-        })
 
+            return owns
+        }, consoleLogger)
 
         final TestsToRun scanned = scanResult.applyFilter(filter, testClassLoader);
 
@@ -140,14 +141,20 @@ $dslText
 
         Closure customFilterStrategy
 
-        MyScannerFilter(ScannerFilter junitFilter, Closure customFilterStrategy) {
+        ConsoleLogger logger;
+
+        MyScannerFilter(ScannerFilter junitFilter, Closure customFilterStrategy, ConsoleLogger logger) {
             this.junitFilter = junitFilter
             this.customFilterStrategy = customFilterStrategy
+            this.logger = logger
         }
 
         @Override
         boolean accept(Class aClass) {
-            return junitFilter.accept(aClass) && customFilterStrategy(aClass)
+            def junitOk = junitFilter.accept(aClass)
+            def extensionOk = customFilterStrategy(aClass)
+
+            return junitOk && extensionOk
         }
     }
 }
