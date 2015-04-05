@@ -15,7 +15,6 @@ import org.apache.maven.surefire.testset.TestSetFailedException
 import org.apache.maven.surefire.util.RunOrderCalculator
 import org.apache.maven.surefire.util.ScanResult
 import org.apache.maven.surefire.util.ScannerFilter
-import org.apache.maven.surefire.util.TestsToRun
 import org.codehaus.groovy.control.CompilerConfiguration
 import org.codehaus.groovy.control.customizers.ImportCustomizer
 
@@ -25,7 +24,7 @@ import org.codehaus.groovy.control.customizers.ImportCustomizer
 class MyJUnitCoreProvider extends AbstractProvider {
     private final ClassLoader testClassLoader;
 
-    private final ScannerFilter scannerFilter;
+    private final ScannerFilter defaultFilter;
 
     private final List<org.junit.runner.notification.RunListener> customRunListeners;
 
@@ -39,35 +38,43 @@ class MyJUnitCoreProvider extends AbstractProvider {
 
     private final ScanResult scanResult;
 
-    Script dslScript;
+    private Script dslScript;
+    private boolean filterIsProvided
+    private String filterFile
 
     MyJUnitCoreProvider(ProviderParameters providerParameters) {
         this.providerParameters = providerParameters;
         this.testClassLoader = providerParameters.getTestClassLoader();
         this.scanResult = providerParameters.getScanResult();
         this.runOrderCalculator = providerParameters.getRunOrderCalculator();
-        this.scannerFilter = new JUnit4TestChecker(testClassLoader);
+        this.defaultFilter = new JUnit4TestChecker(testClassLoader);
         this.requestedTestMethod = providerParameters.getTestRequest().getRequestedTestMethod();
 
-        customRunListeners = JUnit4RunListenerFactory.
-                createCustomListeners(providerParameters.getProviderProperties().getProperty("listener"));
-        jUnit48Reflector = new JUnit48Reflector(testClassLoader);
+        filterFile = System.getProperty('testFilterDsl')
+        filterIsProvided = null != filterFile
 
-        def config = new CompilerConfiguration()
-        def imports = new ImportCustomizer()
-        imports.addStarImports("morning.dsl")
+        if (filterIsProvided) {
+            customRunListeners = JUnit4RunListenerFactory.
+                    createCustomListeners(providerParameters.getProviderProperties().getProperty("listener"));
+            jUnit48Reflector = new JUnit48Reflector(testClassLoader);
 
-        config.addCompilationCustomizers(imports)
+            def config = new CompilerConfiguration()
+            def imports = new ImportCustomizer()
+            imports.addStarImports("morning.dsl")
 
-        def dslText = new File(System.getProperty('testFilterDsl')).text
-        def shell = new GroovyShell(config)
+            config.addCompilationCustomizers(imports)
 
 
-        this.dslScript = shell.parse("""
+            def dslText = new File(System.getProperty('testFilterDsl')).text
+            def shell = new GroovyShell(config)
+
+
+            this.dslScript = shell.parse("""
 Dsl.extendString(dsl)
 
 $dslText
 """)
+        }
     }
 
     @Override
@@ -78,42 +85,43 @@ $dslText
     @Override
     RunResult invoke(Object o) {
         final ConsoleLogger consoleLogger = providerParameters.getConsoleLogger();
-        consoleLogger.info 'Hello DSL Morning\n'
-        consoleLogger.info "In module ${currentModule()}\n"
-
-        TestsToRun junitTests = scanResult.applyFilter(scannerFilter, testClassLoader);
-
-        dslScript.binding = new Binding([
-                dsl: new Dsl(junitTests.iterator()),
-                junitTestClasses: junitTests.iterator(),
-        ])
-
-
-        Dsl.Suite testSuite = dslScript.run()
-
         final ReporterFactory reporterFactory = providerParameters.getReporterFactory();
 
+        def junitTests = scanResult.applyFilter(defaultFilter, testClassLoader);
 
-        org.junit.runner.notification.RunListener jUnit4RunListener = this.getRunListener(reporterFactory);
-        customRunListeners.add(0, jUnit4RunListener);
+        if (filterIsProvided) {
+            consoleLogger.info 'Hello DSL Morning\n'
+            consoleLogger.info "In module ${currentModule()}\n"
 
 
-        def module = currentModule()
-        def filter = new MyScannerFilter(scannerFilter, { Class testClass ->
-            boolean owns = testSuite.ownsTest(module, testClass)
+            dslScript.binding = new Binding([
+                    dsl             : new Dsl(junitTests.iterator()),
+                    junitTestClasses: junitTests.iterator(),
+            ])
 
-            if (owns) {
-                consoleLogger.info "[FILTER] Included test ${testClass.name}\n"
-            } else {
-                consoleLogger.info "[FILTER] Skipped test ${testClass.name}\n"
-            }
 
-            return owns
-        }, consoleLogger)
+            Dsl.Suite testSuite = dslScript.run()
 
-        final TestsToRun scanned = scanResult.applyFilter(filter, testClassLoader);
+            org.junit.runner.notification.RunListener jUnit4RunListener = this.getRunListener(reporterFactory);
+            customRunListeners.add(0, jUnit4RunListener);
 
-        MyJUnitCoreWrapper.execute(scanned, customRunListeners, null);
+            def module = currentModule()
+            def customFilter = new MyScannerFilter(defaultFilter, { Class testClass ->
+                boolean owns = testSuite.ownsTest(module, testClass)
+
+                if (owns) {
+                    consoleLogger.info "[FILTER] Included test ${testClass.name}\n"
+                } else {
+                    consoleLogger.info "[FILTER] Skipped test ${testClass.name}\n"
+                }
+
+                return owns
+            }, consoleLogger)
+
+            junitTests = scanResult.applyFilter(customFilter, testClassLoader);
+        }
+
+        MyJUnitCoreWrapper.execute(junitTests, customRunListeners, null);
         return reporterFactory.close();
     }
 
